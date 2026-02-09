@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DDoS Protection Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+      body { background: linear-gradient(90deg,#0f172a,#071030); color: #e6f0ff; }
+      .card { border-radius: 12px; box-shadow: 0 8px 30px rgba(2,6,23,0.6); }
+      .alert-badge { font-weight:700; padding:6px 10px; border-radius:8px; }
+      .status-ok { background: linear-gradient(90deg,#10b981,#059669); color:white; }
+      .status-alert { background: linear-gradient(90deg,#ef4444,#b91c1c); color:white; }
+      .ip-chip { background: rgba(255,255,255,0.05); padding:6px 10px; border-radius:8px; margin-right:6px; }
+    </style>
+  </head>
+  <body>
+    <div class="container py-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 text-info">DDoS Protection</h1>
+        <div>
+          <a href="/email-setup" class="btn btn-outline-light">Email Alerts</a>
+        <a href="/download-pdf" class="btn btn-primary ms-2">📄 Download Logs (PDF)</a>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-lg-8">
+          <div class="card p-3 mb-3">
+            <h5 class="mb-3">Live Traffic</h5>
+            <canvas id="trafficChart" height="120"></canvas>
+          </div>
+
+          <div class="card p-3">
+            <h5 class="mb-2">Recent Alerts</h5>
+            <div id="alertsList" class="list-group"></div>
+          </div>
+        </div>
+
+        <div class="col-lg-4">
+          <div class="card p-3 mb-3 text-center">
+            <div id="statusBox" class="p-3 rounded">
+              <div id="statusText" class="h5">Loading...</div>
+              <div id="statusDesc" class="small text-muted">Checking system state</div>
+            </div>
+          </div>
+
+          <div class="card p-3">
+            <h6 class="mb-2">Top IPs</h6>
+            <div id="topIps"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const ctx = document.getElementById('trafficChart').getContext('2d');
+      const trafficChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: [], datasets: [{ label: 'Requests', data: [] }] },
+        options: { responsive:true, scales: { y: { beginAtZero:true } } }
+      });
+
+      async function fetchData(){
+        const res = await fetch('/api/traffic');
+        const json = await res.json();
+        return json;
+      }
+
+      async function refreshUI(){
+        try{
+          const data = await fetchData();
+          const reqs = data.requests || {};
+          const alerts = data.alerts || [];
+          // update chart
+          const labels = Object.keys(reqs);
+          const values = labels.map(k => reqs[k]);
+          trafficChart.data.labels = labels;
+          trafficChart.data.datasets[0].data = values;
+          trafficChart.update();
+
+          // top IPs
+          const topIps = labels.sort((a,b)=> reqs[b]-reqs[a]).slice(0,6);
+          const topIpsDiv = document.getElementById('topIps');
+          topIpsDiv.innerHTML = topIps.map(ip => `<span class="ip-chip">${ip} (${reqs[ip]})</span>`).join('');
+
+          // alerts list
+          const alertsList = document.getElementById('alertsList');
+          alertsList.innerHTML = alerts.slice().reverse().map(a => `
+            <div class="list-group-item list-group-item-dark">
+              <div class="d-flex w-100 justify-content-between">
+                <h6 class="mb-1">${a.ip}</h6>
+                <small>${a.timestamp || ''}</small>
+              </div>
+              <p class="mb-1">${a.message}</p>
+            </div>
+          `).join('');
+
+          // status box
+          const statusBox = document.getElementById('statusBox');
+          const statusText = document.getElementById('statusText');
+          const statusDesc = document.getElementById('statusDesc');
+          if(alerts.length > 0){
+            statusBox.className = 'p-3 rounded status-alert';
+            statusText.textContent = '⚠️ Active Alerts';
+            statusDesc.textContent = `${alerts.length} recent alert(s)`;
+          } else {
+            statusBox.className = 'p-3 rounded status-ok';
+            statusText.textContent = '✅ All Clear';
+            statusDesc.textContent = 'No active alerts';
+          }
+
+        }catch(err){
+          console.error(err);
+        }
+      }
+
+      // initial and poll
+      refreshUI();
+      setInterval(refreshUI, 3000);
+    </script>
+  </body>
+</html>
