@@ -7,6 +7,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
+from notifier import send_email_alert
 
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
@@ -33,6 +34,11 @@ def api_traffic():
         "requests": traffic_data.get("requests", {}),
         "alerts": traffic_data.get("alerts", [])
     })
+@app.route("/test-email")
+def test_email():
+    send_email_alert("🔥 Test email from Render!")
+    return "Email function triggered"
+
 
 @app.route("/api/alerts")
 def api_alerts():
